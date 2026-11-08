@@ -1,0 +1,6 @@
+.env
+bin/
+*.exe
+tmp/
+.idea/
+.vscode/
