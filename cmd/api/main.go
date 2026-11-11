@@ -9,6 +9,8 @@ import (
 
 	"github.com/MDYUSU/mini-jira/internal/config"
 	"github.com/MDYUSU/mini-jira/internal/database"
+	"github.com/MDYUSU/mini-jira/internal/handler"
+	"github.com/MDYUSU/mini-jira/internal/repository"
 )
 
 func main() {
@@ -20,6 +22,9 @@ func main() {
 	}
 	defer db.Close()
 	log.Println("connected to postgres")
+
+	userRepo := repository.NewUserRepository(db)
+	userHandler := handler.NewUserHandler(userRepo)
 
 	mux := http.NewServeMux()
 
@@ -36,6 +41,9 @@ func main() {
 		w.WriteHeader(code)
 		json.NewEncoder(w).Encode(map[string]string{"status": status})
 	})
+
+	mux.HandleFunc("GET /users", userHandler.List)
+	mux.HandleFunc("GET /users/{id}", userHandler.Get)
 
 	addr := ":" + cfg.AppPort
 	log.Printf("server listening on %s", addr)
