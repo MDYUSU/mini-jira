@@ -1,0 +1,776 @@
+openapi: 3.0.3
+info:
+  title: Mini Jira API
+  version: 0.1.0
+  description: Practice backend for learning Go and PostgreSQL.
+servers:
+  - url: /
+tags:
+  - name: Health
+  - name: Users
+  - name: Organizations
+  - name: Projects
+  - name: Members
+  - name: Tasks
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Check server and database
+      responses:
+        "200":
+          description: Server and database are up
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+        "503":
+          description: Database unreachable
+
+  /users:
+    get:
+      tags: [Users]
+      summary: List all users
+      responses:
+        "200":
+          description: All users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+    post:
+      tags: [Users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserInput"
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /users/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Users]
+      summary: Get a user with profile
+      responses:
+        "200":
+          description: The user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserWithProfile"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Users]
+      summary: Update a user's name and/or email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserInput"
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Users]
+      summary: Delete a user
+      description: Blocked with 409 if the user owns an organization or reported tasks.
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /users/{id}/profile:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    put:
+      tags: [Users]
+      summary: Create or update a user's profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProfileInput"
+      responses:
+        "200":
+          description: Saved profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserProfile"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /orgs:
+    post:
+      tags: [Organizations]
+      summary: Create an organization
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateOrganizationInput"
+      responses:
+        "201":
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /orgs/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Organizations]
+      summary: Get an organization with its owner
+      responses:
+        "200":
+          description: The organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Organization"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /orgs/{id}/projects:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Organizations]
+      summary: List projects in an organization
+      responses:
+        "200":
+          description: Projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Project"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Projects]
+      summary: Create a project (the owner is added as a member in the same transaction)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProjectInput"
+      responses:
+        "201":
+          description: Project created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Projects]
+      summary: Get a project with its organization and members
+      responses:
+        "200":
+          description: The project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Projects]
+      summary: Update a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProjectInput"
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Project"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Projects]
+      summary: Delete a project (members, tasks, labels and comments cascade)
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{id}/tasks:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Tasks]
+      summary: List tasks in a project
+      responses:
+        "200":
+          description: Tasks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Task"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /projects/{id}/members:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Members]
+      summary: Add a member to a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddMemberInput"
+      responses:
+        "201":
+          description: Member added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /projects/{id}/members/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      tags: [Members]
+      summary: Change a member's role
+      description: Returns 409 if this would leave the project without an owner.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateMemberInput"
+      responses:
+        "200":
+          description: Updated member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProjectMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      tags: [Members]
+      summary: Remove a member from a project
+      description: Their tasks in this project become unassigned. Returns 409 if they are the last owner.
+      responses:
+        "204":
+          description: Removed
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /tasks/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Tasks]
+      summary: Get a task with labels, subtasks and comments
+      responses:
+        "200":
+          description: The task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tasks/{id}/activity:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Tasks]
+      summary: Get a task's change history
+      responses:
+        "200":
+          description: Activity logs, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityLog"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        example: 1
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+        example: 2
+
+  responses:
+    BadRequest:
+      description: Invalid input
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Conflicts with existing data
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: user not found
+
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        email:
+          type: string
+          example: mohammed@aiotrix.com
+        name:
+          type: string
+          example: Mohammed
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    UserProfile:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          example: 1
+        bio:
+          type: string
+          nullable: true
+          example: Backend learner
+        avatar_url:
+          type: string
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+
+    UserWithProfile:
+      allOf:
+        - $ref: "#/components/schemas/User"
+        - type: object
+          properties:
+            profile:
+              allOf:
+                - $ref: "#/components/schemas/UserProfile"
+              nullable: true
+
+    CreateUserInput:
+      type: object
+      required: [email, name]
+      properties:
+        email:
+          type: string
+          example: sara@aiotrix.com
+        name:
+          type: string
+          example: Sara
+
+    UpdateUserInput:
+      type: object
+      description: Send only the fields you want to change.
+      properties:
+        email:
+          type: string
+          example: sara.k@aiotrix.com
+        name:
+          type: string
+          example: Sara K
+
+    ProfileInput:
+      type: object
+      properties:
+        bio:
+          type: string
+          nullable: true
+          example: QA engineer
+        avatar_url:
+          type: string
+          nullable: true
+          example: https://example.com/sara.png
+
+    Organization:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: Aiotrix
+        owner_id:
+          type: integer
+          example: 1
+        owner_name:
+          type: string
+          example: Mohammed
+        created_at:
+          type: string
+          format: date-time
+
+    CreateOrganizationInput:
+      type: object
+      required: [name, owner_id]
+      properties:
+        name:
+          type: string
+          example: Acme
+        owner_id:
+          type: integer
+          example: 1
+
+    Project:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        org_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: ART Backend
+        key:
+          type: string
+          example: ART
+        description:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    ProjectMember:
+      type: object
+      properties:
+        user_id:
+          type: integer
+          example: 2
+        name:
+          type: string
+          example: Ravi
+        email:
+          type: string
+          example: ravi@aiotrix.com
+        role:
+          type: string
+          enum: [owner, member, viewer]
+          example: member
+        joined_at:
+          type: string
+          format: date-time
+
+    ProjectDetail:
+      allOf:
+        - $ref: "#/components/schemas/Project"
+        - type: object
+          properties:
+            org_name:
+              type: string
+              example: Aiotrix
+            members:
+              type: array
+              items:
+                $ref: "#/components/schemas/ProjectMember"
+
+    CreateProjectInput:
+      type: object
+      required: [name, key, owner_id]
+      properties:
+        name:
+          type: string
+          example: Mobile App
+        key:
+          type: string
+          description: 2-10 letters or digits, starting with a letter. Stored in uppercase.
+          example: MOB
+        description:
+          type: string
+          nullable: true
+          example: Customer mobile app
+        owner_id:
+          type: integer
+          example: 2
+
+    UpdateProjectInput:
+      type: object
+      description: Send only the fields you want to change.
+      properties:
+        name:
+          type: string
+          example: Mobile App v2
+        key:
+          type: string
+          example: MOB2
+        description:
+          type: string
+          example: Second version
+
+    AddMemberInput:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: integer
+          example: 3
+        role:
+          type: string
+          enum: [owner, member, viewer]
+          default: member
+          example: viewer
+
+    UpdateMemberInput:
+      type: object
+      required: [role]
+      properties:
+        role:
+          type: string
+          enum: [owner, member, viewer]
+          example: member
+
+    UserRef:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        name:
+          type: string
+          example: Ravi
+
+    Task:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        project_id:
+          type: integer
+          example: 1
+        parent_task_id:
+          type: integer
+          nullable: true
+        title:
+          type: string
+          example: Build login API
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [todo, in_progress, in_review, done]
+          example: in_progress
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          example: high
+        assignee:
+          allOf:
+            - $ref: "#/components/schemas/UserRef"
+          nullable: true
+        reporter:
+          $ref: "#/components/schemas/UserRef"
+        due_date:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Label:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: backend
+        color:
+          type: string
+          example: "#2563eb"
+
+    Comment:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        author:
+          allOf:
+            - $ref: "#/components/schemas/UserRef"
+          nullable: true
+        body:
+          type: string
+          example: Any ETA?
+        created_at:
+          type: string
+          format: date-time
+
+    TaskDetail:
+      allOf:
+        - $ref: "#/components/schemas/Task"
+        - type: object
+          properties:
+            labels:
+              type: array
+              items:
+                $ref: "#/components/schemas/Label"
+            subtasks:
+              type: array
+              items:
+                $ref: "#/components/schemas/Task"
+            comments:
+              type: array
+              items:
+                $ref: "#/components/schemas/Comment"
+
+    ActivityLog:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        actor:
+          allOf:
+            - $ref: "#/components/schemas/UserRef"
+          nullable: true
+        action:
+          type: string
+          example: status_changed
+        field:
+          type: string
+          nullable: true
+          example: status
+        old_value:
+          type: string
+          nullable: true
+          example: todo
+        new_value:
+          type: string
+          nullable: true
+          example: in_progress
+        created_at:
+          type: string
+          format: date-time

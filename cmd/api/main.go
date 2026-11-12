@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MDYUSU/mini-jira/docs"
 	"github.com/MDYUSU/mini-jira/internal/config"
 	"github.com/MDYUSU/mini-jira/internal/database"
 	"github.com/MDYUSU/mini-jira/internal/handler"
@@ -39,6 +40,8 @@ func main() {
 	taskHandler := handler.NewTaskHandler(taskRepo, projectRepo)
 
 	mux := http.NewServeMux()
+
+	docs.Register(mux)
 
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
@@ -80,5 +83,6 @@ func main() {
 
 	addr := ":" + cfg.AppPort
 	log.Printf("server listening on %s", addr)
+	log.Printf("api docs at http://localhost%s/docs", addr)
 	log.Fatal(http.ListenAndServe(addr, mux))
 }
