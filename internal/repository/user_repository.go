@@ -9,7 +9,6 @@ import (
 	"github.com/MDYUSU/mini-jira/internal/model"
 )
 
-var ErrNotFound = errors.New("not found")
 
 type UserRepository struct {
 	db *sql.DB

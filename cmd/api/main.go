@@ -24,7 +24,12 @@ func main() {
 	log.Println("connected to postgres")
 
 	userRepo := repository.NewUserRepository(db)
+	orgRepo := repository.NewOrganizationRepository(db)
+	projectRepo := repository.NewProjectRepository(db)
+
 	userHandler := handler.NewUserHandler(userRepo)
+	orgHandler := handler.NewOrganizationHandler(orgRepo, projectRepo)
+	projectHandler := handler.NewProjectHandler(projectRepo)
 
 	mux := http.NewServeMux()
 
@@ -44,6 +49,11 @@ func main() {
 
 	mux.HandleFunc("GET /users", userHandler.List)
 	mux.HandleFunc("GET /users/{id}", userHandler.Get)
+
+	mux.HandleFunc("GET /orgs/{id}", orgHandler.Get)
+	mux.HandleFunc("GET /orgs/{id}/projects", orgHandler.ListProjects)
+
+	mux.HandleFunc("GET /projects/{id}", projectHandler.Get)
 
 	addr := ":" + cfg.AppPort
 	log.Printf("server listening on %s", addr)
