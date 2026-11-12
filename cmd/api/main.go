@@ -30,10 +30,12 @@ func main() {
 	taskRepo := repository.NewTaskRepository(db)
 
 	userService := service.NewUserService(userRepo)
+	orgService := service.NewOrganizationService(orgRepo, projectRepo)
+	projectService := service.NewProjectService(projectRepo, orgRepo)
 
 	userHandler := handler.NewUserHandler(userService)
-	orgHandler := handler.NewOrganizationHandler(orgRepo, projectRepo)
-	projectHandler := handler.NewProjectHandler(projectRepo)
+	orgHandler := handler.NewOrganizationHandler(orgService)
+	projectHandler := handler.NewProjectHandler(projectService)
 	taskHandler := handler.NewTaskHandler(taskRepo, projectRepo)
 
 	mux := http.NewServeMux()
@@ -59,11 +61,19 @@ func main() {
 	mux.HandleFunc("DELETE /users/{id}", userHandler.Delete)
 	mux.HandleFunc("PUT /users/{id}/profile", userHandler.UpsertProfile)
 
+	mux.HandleFunc("POST /orgs", orgHandler.Create)
 	mux.HandleFunc("GET /orgs/{id}", orgHandler.Get)
 	mux.HandleFunc("GET /orgs/{id}/projects", orgHandler.ListProjects)
+	mux.HandleFunc("POST /orgs/{id}/projects", projectHandler.Create)
 
 	mux.HandleFunc("GET /projects/{id}", projectHandler.Get)
+	mux.HandleFunc("PATCH /projects/{id}", projectHandler.Update)
+	mux.HandleFunc("DELETE /projects/{id}", projectHandler.Delete)
 	mux.HandleFunc("GET /projects/{id}/tasks", taskHandler.ListByProject)
+
+	mux.HandleFunc("POST /projects/{id}/members", projectHandler.AddMember)
+	mux.HandleFunc("PATCH /projects/{id}/members/{userId}", projectHandler.UpdateMemberRole)
+	mux.HandleFunc("DELETE /projects/{id}/members/{userId}", projectHandler.RemoveMember)
 
 	mux.HandleFunc("GET /tasks/{id}", taskHandler.Get)
 	mux.HandleFunc("GET /tasks/{id}/activity", taskHandler.ListActivity)

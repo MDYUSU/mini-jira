@@ -28,3 +28,15 @@ func (r *OrganizationRepository) GetByID(ctx context.Context, id int64) (model.O
 	}
 	return o, err
 }
+
+func (r *OrganizationRepository) Create(ctx context.Context, name string, ownerID int64) (model.Organization, error) {
+	var id int64
+	err := r.db.QueryRowContext(ctx, `
+		INSERT INTO organizations (name, owner_id)
+		VALUES ($1, $2)
+		RETURNING id`, name, ownerID).Scan(&id)
+	if err != nil {
+		return model.Organization{}, mapError(err)
+	}
+	return r.GetByID(ctx, id)
+}

@@ -11,6 +11,7 @@ var (
 	ErrNotFound   = errors.New("not found")
 	ErrConflict   = errors.New("conflict")
 	ErrForeignKey = errors.New("foreign key violation")
+	ErrCheck      = errors.New("check violation")
 )
 
 func mapError(err error) error {
@@ -21,6 +22,8 @@ func mapError(err error) error {
 			return fmt.Errorf("%w: %s", ErrConflict, pgErr.ConstraintName)
 		case "23503":
 			return fmt.Errorf("%w: %s", ErrForeignKey, pgErr.ConstraintName)
+		case "23514":
+			return fmt.Errorf("%w: %s", ErrCheck, pgErr.ConstraintName)
 		}
 	}
 	return err
