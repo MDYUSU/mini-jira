@@ -75,3 +75,9 @@ func (r *ProjectRepository) GetDetail(ctx context.Context, id int64) (model.Proj
 	}
 	return d, rows.Err()
 }
+
+func (r *ProjectRepository) Exists(ctx context.Context, id int64) (bool, error) {
+	var exists bool
+	err := r.db.QueryRowContext(ctx, `SELECT EXISTS (SELECT 1 FROM projects WHERE id = $1)`, id).Scan(&exists)
+	return exists, err
+}

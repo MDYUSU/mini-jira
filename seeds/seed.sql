@@ -18,7 +18,7 @@ INSERT INTO projects (org_id, name, key) VALUES
 (1, 'ART Backend', 'ART'),
 (1, 'Website', 'WEB'),
 (2, 'Internal Tools', 'INT');
-
+DELETE /users/5
 INSERT INTO project_members (project_id, user_id, role) VALUES
 (1, 1, 'owner'),
 (1, 2, 'member'),

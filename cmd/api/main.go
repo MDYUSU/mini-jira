@@ -11,6 +11,7 @@ import (
 	"github.com/MDYUSU/mini-jira/internal/database"
 	"github.com/MDYUSU/mini-jira/internal/handler"
 	"github.com/MDYUSU/mini-jira/internal/repository"
+	"github.com/MDYUSU/mini-jira/internal/service"
 )
 
 func main() {
@@ -26,10 +27,14 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	orgRepo := repository.NewOrganizationRepository(db)
 	projectRepo := repository.NewProjectRepository(db)
+	taskRepo := repository.NewTaskRepository(db)
 
-	userHandler := handler.NewUserHandler(userRepo)
+	userService := service.NewUserService(userRepo)
+
+	userHandler := handler.NewUserHandler(userService)
 	orgHandler := handler.NewOrganizationHandler(orgRepo, projectRepo)
 	projectHandler := handler.NewProjectHandler(projectRepo)
+	taskHandler := handler.NewTaskHandler(taskRepo, projectRepo)
 
 	mux := http.NewServeMux()
 
@@ -48,12 +53,20 @@ func main() {
 	})
 
 	mux.HandleFunc("GET /users", userHandler.List)
+	mux.HandleFunc("POST /users", userHandler.Create)
 	mux.HandleFunc("GET /users/{id}", userHandler.Get)
+	mux.HandleFunc("PATCH /users/{id}", userHandler.Update)
+	mux.HandleFunc("DELETE /users/{id}", userHandler.Delete)
+	mux.HandleFunc("PUT /users/{id}/profile", userHandler.UpsertProfile)
 
 	mux.HandleFunc("GET /orgs/{id}", orgHandler.Get)
 	mux.HandleFunc("GET /orgs/{id}/projects", orgHandler.ListProjects)
 
 	mux.HandleFunc("GET /projects/{id}", projectHandler.Get)
+	mux.HandleFunc("GET /projects/{id}/tasks", taskHandler.ListByProject)
+
+	mux.HandleFunc("GET /tasks/{id}", taskHandler.Get)
+	mux.HandleFunc("GET /tasks/{id}/activity", taskHandler.ListActivity)
 
 	addr := ":" + cfg.AppPort
 	log.Printf("server listening on %s", addr)
