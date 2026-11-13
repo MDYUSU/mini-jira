@@ -4,6 +4,8 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"strconv"
+	"time"
 
 	"github.com/MDYUSU/mini-jira/internal/model"
 )
@@ -14,6 +16,29 @@ type TaskRepository struct {
 
 func NewTaskRepository(db *sql.DB) *TaskRepository {
 	return &TaskRepository{db: db}
+}
+
+type NewTask struct {
+	ProjectID    int64
+	ParentTaskID *int64
+	Title        string
+	Description  *string
+	Status       string
+	Priority     string
+	AssigneeID   *int64
+	ReporterID   int64
+	DueDate      *time.Time
+}
+
+type TaskChanges struct {
+	Title       *string
+	Description *string
+	Status      *string
+	Priority    *string
+	SetAssignee bool
+	AssigneeID  *int64
+	SetDueDate  bool
+	DueDate     *time.Time
 }
 
 const taskSelect = `
@@ -75,11 +100,25 @@ func (r *TaskRepository) Exists(ctx context.Context, id int64) (bool, error) {
 	return exists, err
 }
 
-func (r *TaskRepository) GetDetail(ctx context.Context, id int64) (model.TaskDetail, error) {
+func (r *TaskRepository) GetByID(ctx context.Context, id int64) (model.Task, error) {
 	t, err := scanTask(r.db.QueryRowContext(ctx, taskSelect+` WHERE t.id = $1`, id))
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.TaskDetail{}, ErrNotFound
+		return t, ErrNotFound
 	}
+	return t, err
+}
+
+func (r *TaskRepository) GetProjectID(ctx context.Context, id int64) (int64, error) {
+	var projectID int64
+	err := r.db.QueryRowContext(ctx, `SELECT project_id FROM tasks WHERE id = $1`, id).Scan(&projectID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, ErrNotFound
+	}
+	return projectID, err
+}
+
+func (r *TaskRepository) GetDetail(ctx context.Context, id int64) (model.TaskDetail, error) {
+	t, err := r.GetByID(ctx, id)
 	if err != nil {
 		return model.TaskDetail{}, err
 	}
@@ -161,7 +200,7 @@ func (r *TaskRepository) ListActivity(ctx context.Context, taskID int64) ([]mode
 		FROM activity_logs a
 		LEFT JOIN users u ON u.id = a.actor_id
 		WHERE a.task_id = $1
-		ORDER BY a.created_at`, taskID)
+		ORDER BY a.created_at, a.id`, taskID)
 	if err != nil {
 		return nil, err
 	}
@@ -181,4 +220,179 @@ func (r *TaskRepository) ListActivity(ctx context.Context, taskID int64) ([]mode
 		logs = append(logs, l)
 	}
 	return logs, rows.Err()
+}
+
+func (r *TaskRepository) Create(ctx context.Context, t NewTask) (int64, error) {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var id int64
+	err = tx.QueryRowContext(ctx, `
+		INSERT INTO tasks (project_id, parent_task_id, title, description, status, priority, assignee_id, reporter_id, due_date)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		RETURNING id`,
+		t.ProjectID, t.ParentTaskID, t.Title, t.Description, t.Status, t.Priority, t.AssigneeID, t.ReporterID, t.DueDate,
+	).Scan(&id)
+	if err != nil {
+		return 0, mapError(err)
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO activity_logs (task_id, actor_id, action)
+		VALUES ($1, $2, 'created')`, id, t.ReporterID); err != nil {
+		return 0, mapError(err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
+type activityEntry struct {
+	action   string
+	field    string
+	oldValue *string
+	newValue *string
+}
+
+func (r *TaskRepository) Update(ctx context.Context, id, actorID int64, c TaskChanges) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var cur struct {
+		title       string
+		description *string
+		status      string
+		priority    string
+		assigneeID  *int64
+		dueDate     *time.Time
+	}
+	err = tx.QueryRowContext(ctx, `
+		SELECT title, description, status, priority, assignee_id, due_date
+		FROM tasks
+		WHERE id = $1
+		FOR UPDATE`, id).Scan(&cur.title, &cur.description, &cur.status, &cur.priority, &cur.assigneeID, &cur.dueDate)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+
+	next := cur
+	var logs []activityEntry
+
+	if c.Title != nil && *c.Title != cur.title {
+		logs = append(logs, activityEntry{"title_changed", "title", &cur.title, c.Title})
+		next.title = *c.Title
+	}
+	if c.Description != nil && !equalString(c.Description, cur.description) {
+		logs = append(logs, activityEntry{"description_changed", "description", cur.description, c.Description})
+		next.description = c.Description
+	}
+	if c.Status != nil && *c.Status != cur.status {
+		logs = append(logs, activityEntry{"status_changed", "status", &cur.status, c.Status})
+		next.status = *c.Status
+	}
+	if c.Priority != nil && *c.Priority != cur.priority {
+		logs = append(logs, activityEntry{"priority_changed", "priority", &cur.priority, c.Priority})
+		next.priority = *c.Priority
+	}
+	if c.SetAssignee && !equalInt(c.AssigneeID, cur.assigneeID) {
+		action := "assigned"
+		if c.AssigneeID == nil {
+			action = "unassigned"
+		}
+		logs = append(logs, activityEntry{action, "assignee_id", intText(cur.assigneeID), intText(c.AssigneeID)})
+		next.assigneeID = c.AssigneeID
+	}
+	if c.SetDueDate && !equalDate(c.DueDate, cur.dueDate) {
+		logs = append(logs, activityEntry{"due_date_changed", "due_date", dateText(cur.dueDate), dateText(c.DueDate)})
+		next.dueDate = c.DueDate
+	}
+
+	if len(logs) == 0 {
+		return nil
+	}
+
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE tasks
+		SET title = $2, description = $3, status = $4, priority = $5,
+		    assignee_id = $6, due_date = $7, updated_at = now()
+		WHERE id = $1`,
+		id, next.title, next.description, next.status, next.priority, next.assigneeID, next.dueDate,
+	); err != nil {
+		return mapError(err)
+	}
+
+	for _, l := range logs {
+		if _, err := tx.ExecContext(ctx, `
+			INSERT INTO activity_logs (task_id, actor_id, action, field, old_value, new_value)
+			VALUES ($1, $2, $3, $4, $5, $6)`,
+			id, actorID, l.action, l.field, l.oldValue, l.newValue,
+		); err != nil {
+			return mapError(err)
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *TaskRepository) Delete(ctx context.Context, id int64) error {
+	res, err := r.db.ExecContext(ctx, `DELETE FROM tasks WHERE id = $1`, id)
+	if err != nil {
+		return mapError(err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func equalString(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func equalInt(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func equalDate(a, b *time.Time) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.Format("2006-01-02") == b.Format("2006-01-02")
+}
+
+func intText(v *int64) *string {
+	if v == nil {
+		return nil
+	}
+	s := strconv.FormatInt(*v, 10)
+	return &s
+}
+
+func dateText(v *time.Time) *string {
+	if v == nil {
+		return nil
+	}
+	s := v.Format("2006-01-02")
+	return &s
 }

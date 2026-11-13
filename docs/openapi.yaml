@@ -278,6 +278,29 @@ paths:
                   $ref: "#/components/schemas/Task"
         "404":
           $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Tasks]
+      summary: Create a task or subtask
+      description: Set parent_task_id to create a subtask. The reporter must be a project member who is not a viewer.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTaskInput"
+      responses:
+        "201":
+          description: Task created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Viewers cannot create tasks
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /projects/{id}/members:
     parameters:
@@ -357,6 +380,37 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TaskDetail"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Tasks]
+      summary: Update a task (each real change is written to the activity log)
+      description: Send assignee_id 0 to unassign, and due_date "" to clear the due date.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTaskInput"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Viewers cannot change tasks
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Tasks]
+      summary: Delete a task (subtasks, label links, comments and logs cascade)
+      responses:
+        "204":
+          description: Deleted
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -774,3 +828,71 @@ components:
         created_at:
           type: string
           format: date-time
+
+    CreateTaskInput:
+      type: object
+      required: [title, reporter_id]
+      properties:
+        title:
+          type: string
+          example: Add rate limiting
+        description:
+          type: string
+          nullable: true
+          example: Limit login attempts per IP
+        status:
+          type: string
+          enum: [todo, in_progress, in_review, done]
+          default: todo
+          example: todo
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          default: medium
+          example: high
+        assignee_id:
+          type: integer
+          nullable: true
+          example: 2
+        parent_task_id:
+          type: integer
+          nullable: true
+          example: null
+        due_date:
+          type: string
+          format: date
+          nullable: true
+          example: "2026-11-30"
+        reporter_id:
+          type: integer
+          example: 1
+
+    UpdateTaskInput:
+      type: object
+      required: [actor_id]
+      description: Send actor_id plus only the fields you want to change.
+      properties:
+        actor_id:
+          type: integer
+          example: 2
+        title:
+          type: string
+          example: Add rate limiting to login
+        description:
+          type: string
+        status:
+          type: string
+          enum: [todo, in_progress, in_review, done]
+          example: in_progress
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          example: urgent
+        assignee_id:
+          type: integer
+          description: 0 unassigns the task
+          example: 1
+        due_date:
+          type: string
+          description: YYYY-MM-DD, or "" to clear
+          example: "2026-12-05"
