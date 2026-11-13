@@ -29,16 +29,22 @@ func main() {
 	orgRepo := repository.NewOrganizationRepository(db)
 	projectRepo := repository.NewProjectRepository(db)
 	taskRepo := repository.NewTaskRepository(db)
+	labelRepo := repository.NewLabelRepository(db)
+	commentRepo := repository.NewCommentRepository(db)
 
 	userService := service.NewUserService(userRepo)
 	orgService := service.NewOrganizationService(orgRepo, projectRepo)
 	projectService := service.NewProjectService(projectRepo, orgRepo)
 	taskService := service.NewTaskService(taskRepo, projectRepo)
+	labelService := service.NewLabelService(labelRepo, taskRepo, projectRepo)
+	commentService := service.NewCommentService(commentRepo, taskRepo, projectRepo)
 
 	userHandler := handler.NewUserHandler(userService)
 	orgHandler := handler.NewOrganizationHandler(orgService)
 	projectHandler := handler.NewProjectHandler(projectService)
 	taskHandler := handler.NewTaskHandler(taskService)
+	labelHandler := handler.NewLabelHandler(labelService)
+	commentHandler := handler.NewCommentHandler(commentService)
 
 	mux := http.NewServeMux()
 
@@ -84,6 +90,17 @@ func main() {
 	mux.HandleFunc("PATCH /tasks/{id}", taskHandler.Update)
 	mux.HandleFunc("DELETE /tasks/{id}", taskHandler.Delete)
 	mux.HandleFunc("GET /tasks/{id}/activity", taskHandler.ListActivity)
+
+	mux.HandleFunc("GET /projects/{id}/labels", labelHandler.ListByProject)
+	mux.HandleFunc("POST /projects/{id}/labels", labelHandler.Create)
+	mux.HandleFunc("DELETE /labels/{id}", labelHandler.Delete)
+	mux.HandleFunc("POST /tasks/{id}/labels", labelHandler.Attach)
+	mux.HandleFunc("DELETE /tasks/{id}/labels/{labelId}", labelHandler.Detach)
+
+	mux.HandleFunc("GET /tasks/{id}/comments", commentHandler.ListByTask)
+	mux.HandleFunc("POST /tasks/{id}/comments", commentHandler.Create)
+	mux.HandleFunc("PATCH /comments/{id}", commentHandler.Update)
+	mux.HandleFunc("DELETE /comments/{id}", commentHandler.Delete)
 
 	addr := ":" + cfg.AppPort
 	log.Printf("server listening on %s", addr)

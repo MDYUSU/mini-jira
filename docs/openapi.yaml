@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Mini Jira API
-  version: 0.1.0
+  version: 0.2.0
   description: Practice backend for learning Go and PostgreSQL.
 servers:
   - url: /
@@ -12,6 +12,8 @@ tags:
   - name: Projects
   - name: Members
   - name: Tasks
+  - name: Labels
+  - name: Comments
 
 paths:
   /health:
@@ -266,16 +268,73 @@ paths:
       - $ref: "#/components/parameters/Id"
     get:
       tags: [Tasks]
-      summary: List tasks in a project
+      summary: List tasks in a project, with filters, sorting and pagination
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [todo, in_progress, in_review, done]
+        - name: priority
+          in: query
+          schema:
+            type: string
+            enum: [low, medium, high, urgent]
+        - name: assignee
+          in: query
+          description: A user id, or "none" for unassigned tasks
+          schema:
+            type: string
+            example: "2"
+        - name: label
+          in: query
+          description: Label name, for example security
+          schema:
+            type: string
+        - name: search
+          in: query
+          description: Text the title should contain
+          schema:
+            type: string
+        - name: top_level
+          in: query
+          description: true to hide subtasks
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [created_at, due_date, priority, status, title]
+            default: created_at
+        - name: order
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: asc
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
       responses:
         "200":
-          description: Tasks
+          description: One page of tasks
           content:
             application/json:
               schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Task"
+                $ref: "#/components/schemas/TaskPage"
+        "400":
+          $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
     post:
@@ -367,6 +426,58 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /projects/{id}/labels:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Labels]
+      summary: List a project's labels
+      responses:
+        "200":
+          description: Labels
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Label"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Labels]
+      summary: Create a label in a project
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateLabelInput"
+      responses:
+        "201":
+          description: Label created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /labels/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    delete:
+      tags: [Labels]
+      summary: Delete a label (removed from every task automatically)
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /tasks/{id}:
     parameters:
       - $ref: "#/components/parameters/Id"
@@ -429,6 +540,149 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/ActivityLog"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tasks/{id}/labels:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    post:
+      tags: [Labels]
+      summary: Attach a label to a task
+      description: The label must belong to the task's project. Writes a label_added activity log.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AttachLabelInput"
+      responses:
+        "201":
+          description: The task's labels after attaching
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Label"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Viewers cannot change tasks
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /tasks/{id}/labels/{labelId}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+      - name: labelId
+        in: path
+        required: true
+        schema:
+          type: integer
+          example: 1
+      - name: actor_id
+        in: query
+        required: true
+        schema:
+          type: integer
+          example: 1
+    delete:
+      tags: [Labels]
+      summary: Detach a label from a task
+      description: Writes a label_removed activity log.
+      responses:
+        "204":
+          description: Detached
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Viewers cannot change tasks
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /tasks/{id}/comments:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Comments]
+      summary: List a task's comments
+      responses:
+        "200":
+          description: Comments, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Comment"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Comments]
+      summary: Add a comment (any project member, including viewers)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "201":
+          description: Comment added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /comments/{id}:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    patch:
+      tags: [Comments]
+      summary: Edit a comment (author only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CommentInput"
+      responses:
+        "200":
+          description: Updated comment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Comment"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Only the author can edit
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      tags: [Comments]
+      summary: Delete a comment (author or project owner)
+      parameters:
+        - name: actor_id
+          in: query
+          required: true
+          schema:
+            type: integer
+            example: 1
+      responses:
+        "204":
+          description: Deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          description: Only the author or a project owner can delete
         "404":
           $ref: "#/components/responses/NotFound"
 
@@ -752,6 +1006,26 @@ components:
           type: string
           format: date-time
 
+    TaskPage:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 6
+        total_pages:
+          type: integer
+          example: 1
+
     Label:
       type: object
       properties:
@@ -896,3 +1170,37 @@ components:
           type: string
           description: YYYY-MM-DD, or "" to clear
           example: "2026-12-05"
+
+    CreateLabelInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: bug
+        color:
+          type: string
+          description: "#RRGGBB, defaults to #888888"
+          example: "#ef4444"
+
+    AttachLabelInput:
+      type: object
+      required: [label_id, actor_id]
+      properties:
+        label_id:
+          type: integer
+          example: 5
+        actor_id:
+          type: integer
+          example: 1
+
+    CommentInput:
+      type: object
+      required: [author_id, body]
+      properties:
+        author_id:
+          type: integer
+          example: 3
+        body:
+          type: string
+          example: Is this blocked?

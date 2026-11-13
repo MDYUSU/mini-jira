@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"net/http"
+	"strconv"
 
 	"github.com/MDYUSU/mini-jira/internal/repository"
 	"github.com/MDYUSU/mini-jira/internal/service"
@@ -23,12 +24,37 @@ func (h *TaskHandler) ListByProject(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid project id")
 		return
 	}
-	tasks, err := h.tasks.ListByProject(r.Context(), projectID)
+
+	q := r.URL.Query()
+
+	page, err := optionalInt(q.Get("page"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "page must be a number")
+		return
+	}
+	limit, err := optionalInt(q.Get("limit"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "limit must be a number")
+		return
+	}
+
+	result, err := h.tasks.ListByProjectPage(r.Context(), projectID, service.TaskListQuery{
+		Status:   q.Get("status"),
+		Priority: q.Get("priority"),
+		Assignee: q.Get("assignee"),
+		Label:    q.Get("label"),
+		Search:   q.Get("search"),
+		TopLevel: q.Get("top_level") == "true",
+		Sort:     q.Get("sort"),
+		Order:    q.Get("order"),
+		Page:     page,
+		Limit:    limit,
+	})
 	if err != nil {
 		writeTaskError(w, err, "list tasks", "project not found")
 		return
 	}
-	writeJSON(w, http.StatusOK, tasks)
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (h *TaskHandler) Get(w http.ResponseWriter, r *http.Request) {
@@ -108,6 +134,13 @@ func (h *TaskHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func optionalInt(raw string) (int, error) {
+	if raw == "" {
+		return 0, nil
+	}
+	return strconv.Atoi(raw)
 }
 
 func writeTaskError(w http.ResponseWriter, err error, op, notFound string) {
