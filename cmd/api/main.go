@@ -91,6 +91,8 @@ func main() {
 	mux.HandleFunc("DELETE /tasks/{id}", taskHandler.Delete)
 	mux.HandleFunc("GET /tasks/{id}/activity", taskHandler.ListActivity)
 	mux.HandleFunc("GET /tasks/{id}/tree", taskHandler.Tree)
+	mux.HandleFunc("GET /projects/{id}/stats", projectHandler.Stats)
+	mux.HandleFunc("GET /projects/{id}/workload", projectHandler.Workload)
 
 	mux.HandleFunc("GET /projects/{id}/labels", labelHandler.ListByProject)
 	mux.HandleFunc("POST /projects/{id}/labels", labelHandler.Create)
