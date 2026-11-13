@@ -686,6 +686,22 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /tasks/{id}/tree:
+    parameters:
+      - $ref: "#/components/parameters/Id"
+    get:
+      tags: [Tasks]
+      summary: Get a task and all its subtasks at every depth, nested
+      responses:
+        "200":
+          description: The task tree
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskTreeNode"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
 components:
   parameters:
     Id:
@@ -1204,3 +1220,15 @@ components:
         body:
           type: string
           example: Is this blocked?
+    TaskTreeNode:
+      allOf:
+        - $ref: "#/components/schemas/Task"
+        - type: object
+          properties:
+            depth:
+              type: integer
+              example: 0
+            children:
+              type: array
+              items:
+                $ref: "#/components/schemas/TaskTreeNode"
