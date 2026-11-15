@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Mini Jira API
   version: 0.3.0
-  description: Practice backend for learning Go and PostgreSQL.
+  description: Practice backend for learning Go and PostgreSQL. Log in with POST /auth/login, then click Authorize and paste the token. Every endpoint except health, register and login returns 401 without a valid token.
 servers:
   - url: /
 tags:
@@ -17,9 +17,13 @@ tags:
   - name: Comments
   - name: Reports
 
+security:
+  - bearerAuth: []
+
 paths:
   /auth/register:
     post:
+      security: []
       tags: [Auth]
       summary: Create an account and get a token
       requestBody:
@@ -42,6 +46,7 @@ paths:
 
   /auth/login:
     post:
+      security: []
       tags: [Auth]
       summary: Log in with email and password and get a token
       requestBody:
@@ -66,8 +71,23 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: The logged-in user, from the token
+      responses:
+        "200":
+          description: The current user with profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserWithProfile"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /health:
     get:
+      security: []
       tags: [Health]
       summary: Check server and database
       responses:
@@ -787,6 +807,12 @@ paths:
           $ref: "#/components/responses/NotFound"
 
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
   parameters:
     Id:
       name: id
@@ -814,6 +840,12 @@ components:
             $ref: "#/components/schemas/Error"
     NotFound:
       description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Unauthorized:
+      description: Missing, invalid or expired token
       content:
         application/json:
           schema:

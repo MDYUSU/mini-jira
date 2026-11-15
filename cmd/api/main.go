@@ -55,11 +55,11 @@ func main() {
 	labelHandler := handler.NewLabelHandler(labelService)
 	commentHandler := handler.NewCommentHandler(commentService)
 
-	mux := http.NewServeMux()
+	root := http.NewServeMux()
 
-	docs.Register(mux)
+	docs.Register(root)
 
-	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+	root.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
@@ -73,52 +73,58 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": status})
 	})
 
-	mux.HandleFunc("POST /auth/register", authHandler.Register)
-	mux.HandleFunc("POST /auth/login", authHandler.Login)
+	root.HandleFunc("POST /auth/register", authHandler.Register)
+	root.HandleFunc("POST /auth/login", authHandler.Login)
 
-	mux.HandleFunc("GET /users", userHandler.List)
-	mux.HandleFunc("POST /users", userHandler.Create)
-	mux.HandleFunc("GET /users/{id}", userHandler.Get)
-	mux.HandleFunc("PATCH /users/{id}", userHandler.Update)
-	mux.HandleFunc("DELETE /users/{id}", userHandler.Delete)
-	mux.HandleFunc("PUT /users/{id}/profile", userHandler.UpsertProfile)
+	api := http.NewServeMux()
 
-	mux.HandleFunc("POST /orgs", orgHandler.Create)
-	mux.HandleFunc("GET /orgs/{id}", orgHandler.Get)
-	mux.HandleFunc("GET /orgs/{id}/projects", orgHandler.ListProjects)
-	mux.HandleFunc("POST /orgs/{id}/projects", projectHandler.Create)
+	api.HandleFunc("GET /auth/me", authHandler.Me)
 
-	mux.HandleFunc("GET /projects/{id}", projectHandler.Get)
-	mux.HandleFunc("PATCH /projects/{id}", projectHandler.Update)
-	mux.HandleFunc("DELETE /projects/{id}", projectHandler.Delete)
-	mux.HandleFunc("GET /projects/{id}/stats", projectHandler.Stats)
-	mux.HandleFunc("GET /projects/{id}/workload", projectHandler.Workload)
+	api.HandleFunc("GET /users", userHandler.List)
+	api.HandleFunc("POST /users", userHandler.Create)
+	api.HandleFunc("GET /users/{id}", userHandler.Get)
+	api.HandleFunc("PATCH /users/{id}", userHandler.Update)
+	api.HandleFunc("DELETE /users/{id}", userHandler.Delete)
+	api.HandleFunc("PUT /users/{id}/profile", userHandler.UpsertProfile)
 
-	mux.HandleFunc("POST /projects/{id}/members", projectHandler.AddMember)
-	mux.HandleFunc("PATCH /projects/{id}/members/{userId}", projectHandler.UpdateMemberRole)
-	mux.HandleFunc("DELETE /projects/{id}/members/{userId}", projectHandler.RemoveMember)
+	api.HandleFunc("POST /orgs", orgHandler.Create)
+	api.HandleFunc("GET /orgs/{id}", orgHandler.Get)
+	api.HandleFunc("GET /orgs/{id}/projects", orgHandler.ListProjects)
+	api.HandleFunc("POST /orgs/{id}/projects", projectHandler.Create)
 
-	mux.HandleFunc("GET /projects/{id}/tasks", taskHandler.ListByProject)
-	mux.HandleFunc("POST /projects/{id}/tasks", taskHandler.Create)
-	mux.HandleFunc("GET /tasks/{id}", taskHandler.Get)
-	mux.HandleFunc("PATCH /tasks/{id}", taskHandler.Update)
-	mux.HandleFunc("DELETE /tasks/{id}", taskHandler.Delete)
-	mux.HandleFunc("GET /tasks/{id}/activity", taskHandler.ListActivity)
-	mux.HandleFunc("GET /tasks/{id}/tree", taskHandler.Tree)
+	api.HandleFunc("GET /projects/{id}", projectHandler.Get)
+	api.HandleFunc("PATCH /projects/{id}", projectHandler.Update)
+	api.HandleFunc("DELETE /projects/{id}", projectHandler.Delete)
+	api.HandleFunc("GET /projects/{id}/stats", projectHandler.Stats)
+	api.HandleFunc("GET /projects/{id}/workload", projectHandler.Workload)
 
-	mux.HandleFunc("GET /projects/{id}/labels", labelHandler.ListByProject)
-	mux.HandleFunc("POST /projects/{id}/labels", labelHandler.Create)
-	mux.HandleFunc("DELETE /labels/{id}", labelHandler.Delete)
-	mux.HandleFunc("POST /tasks/{id}/labels", labelHandler.Attach)
-	mux.HandleFunc("DELETE /tasks/{id}/labels/{labelId}", labelHandler.Detach)
+	api.HandleFunc("POST /projects/{id}/members", projectHandler.AddMember)
+	api.HandleFunc("PATCH /projects/{id}/members/{userId}", projectHandler.UpdateMemberRole)
+	api.HandleFunc("DELETE /projects/{id}/members/{userId}", projectHandler.RemoveMember)
 
-	mux.HandleFunc("GET /tasks/{id}/comments", commentHandler.ListByTask)
-	mux.HandleFunc("POST /tasks/{id}/comments", commentHandler.Create)
-	mux.HandleFunc("PATCH /comments/{id}", commentHandler.Update)
-	mux.HandleFunc("DELETE /comments/{id}", commentHandler.Delete)
+	api.HandleFunc("GET /projects/{id}/tasks", taskHandler.ListByProject)
+	api.HandleFunc("POST /projects/{id}/tasks", taskHandler.Create)
+	api.HandleFunc("GET /tasks/{id}", taskHandler.Get)
+	api.HandleFunc("PATCH /tasks/{id}", taskHandler.Update)
+	api.HandleFunc("DELETE /tasks/{id}", taskHandler.Delete)
+	api.HandleFunc("GET /tasks/{id}/activity", taskHandler.ListActivity)
+	api.HandleFunc("GET /tasks/{id}/tree", taskHandler.Tree)
+
+	api.HandleFunc("GET /projects/{id}/labels", labelHandler.ListByProject)
+	api.HandleFunc("POST /projects/{id}/labels", labelHandler.Create)
+	api.HandleFunc("DELETE /labels/{id}", labelHandler.Delete)
+	api.HandleFunc("POST /tasks/{id}/labels", labelHandler.Attach)
+	api.HandleFunc("DELETE /tasks/{id}/labels/{labelId}", labelHandler.Detach)
+
+	api.HandleFunc("GET /tasks/{id}/comments", commentHandler.ListByTask)
+	api.HandleFunc("POST /tasks/{id}/comments", commentHandler.Create)
+	api.HandleFunc("PATCH /comments/{id}", commentHandler.Update)
+	api.HandleFunc("DELETE /comments/{id}", commentHandler.Delete)
+
+	root.Handle("/", handler.RequireAuth(tokens, api))
 
 	addr := ":" + cfg.AppPort
 	log.Printf("server listening on %s", addr)
 	log.Printf("api docs at http://localhost%s/docs", addr)
-	log.Fatal(http.ListenAndServe(addr, mux))
+	log.Fatal(http.ListenAndServe(addr, root))
 }
