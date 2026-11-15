@@ -4,18 +4,29 @@ import (
 	"bufio"
 	"os"
 	"strings"
+	"time"
 )
 
 type Config struct {
 	AppPort     string
 	DatabaseURL string
+	JWTSecret   string
+	TokenTTL    time.Duration
 }
 
 func Load() Config {
 	loadEnvFile(".env")
+
+	ttl, err := time.ParseDuration(getEnv("TOKEN_TTL", "24h"))
+	if err != nil {
+		ttl = 24 * time.Hour
+	}
+
 	return Config{
 		AppPort:     getEnv("APP_PORT", "8080"),
 		DatabaseURL: getEnv("DATABASE_URL", ""),
+		JWTSecret:   getEnv("JWT_SECRET", ""),
+		TokenTTL:    ttl,
 	}
 }
 

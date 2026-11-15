@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/MDYUSU/mini-jira/docs"
+	"github.com/MDYUSU/mini-jira/internal/auth"
 	"github.com/MDYUSU/mini-jira/internal/config"
 	"github.com/MDYUSU/mini-jira/internal/database"
 	"github.com/MDYUSU/mini-jira/internal/handler"
@@ -18,12 +19,18 @@ import (
 func main() {
 	cfg := config.Load()
 
+	if len(cfg.JWTSecret) < 32 {
+		log.Fatal("JWT_SECRET must be set in .env and be at least 32 characters")
+	}
+
 	db, err := database.Connect(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("database connection failed: %v", err)
 	}
 	defer db.Close()
 	log.Println("connected to postgres")
+
+	tokens := auth.NewTokenManager(cfg.JWTSecret, cfg.TokenTTL)
 
 	userRepo := repository.NewUserRepository(db)
 	orgRepo := repository.NewOrganizationRepository(db)
@@ -32,6 +39,7 @@ func main() {
 	labelRepo := repository.NewLabelRepository(db)
 	commentRepo := repository.NewCommentRepository(db)
 
+	authService := service.NewAuthService(userRepo, tokens)
 	userService := service.NewUserService(userRepo)
 	orgService := service.NewOrganizationService(orgRepo, projectRepo)
 	projectService := service.NewProjectService(projectRepo, orgRepo)
@@ -39,6 +47,7 @@ func main() {
 	labelService := service.NewLabelService(labelRepo, taskRepo, projectRepo)
 	commentService := service.NewCommentService(commentRepo, taskRepo, projectRepo)
 
+	authHandler := handler.NewAuthHandler(authService)
 	userHandler := handler.NewUserHandler(userService)
 	orgHandler := handler.NewOrganizationHandler(orgService)
 	projectHandler := handler.NewProjectHandler(projectService)
@@ -64,6 +73,9 @@ func main() {
 		json.NewEncoder(w).Encode(map[string]string{"status": status})
 	})
 
+	mux.HandleFunc("POST /auth/register", authHandler.Register)
+	mux.HandleFunc("POST /auth/login", authHandler.Login)
+
 	mux.HandleFunc("GET /users", userHandler.List)
 	mux.HandleFunc("POST /users", userHandler.Create)
 	mux.HandleFunc("GET /users/{id}", userHandler.Get)
@@ -79,6 +91,8 @@ func main() {
 	mux.HandleFunc("GET /projects/{id}", projectHandler.Get)
 	mux.HandleFunc("PATCH /projects/{id}", projectHandler.Update)
 	mux.HandleFunc("DELETE /projects/{id}", projectHandler.Delete)
+	mux.HandleFunc("GET /projects/{id}/stats", projectHandler.Stats)
+	mux.HandleFunc("GET /projects/{id}/workload", projectHandler.Workload)
 
 	mux.HandleFunc("POST /projects/{id}/members", projectHandler.AddMember)
 	mux.HandleFunc("PATCH /projects/{id}/members/{userId}", projectHandler.UpdateMemberRole)
@@ -91,8 +105,6 @@ func main() {
 	mux.HandleFunc("DELETE /tasks/{id}", taskHandler.Delete)
 	mux.HandleFunc("GET /tasks/{id}/activity", taskHandler.ListActivity)
 	mux.HandleFunc("GET /tasks/{id}/tree", taskHandler.Tree)
-	mux.HandleFunc("GET /projects/{id}/stats", projectHandler.Stats)
-	mux.HandleFunc("GET /projects/{id}/workload", projectHandler.Workload)
 
 	mux.HandleFunc("GET /projects/{id}/labels", labelHandler.ListByProject)
 	mux.HandleFunc("POST /projects/{id}/labels", labelHandler.Create)

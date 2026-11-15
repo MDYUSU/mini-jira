@@ -1,10 +1,10 @@
 TRUNCATE users, user_profiles, organizations, projects, project_members, tasks, labels, task_labels, comments, activity_logs RESTART IDENTITY CASCADE;
 
-INSERT INTO users (email, name) VALUES
-('mohammed@aiotrix.com', 'Mohammed'),
-('ravi@aiotrix.com', 'Ravi'),
-('priya@aiotrix.com', 'Priya'),
-('arjun@aiotrix.com', 'Arjun');
+INSERT INTO users (email, name, password_hash) VALUES
+('mohammed@aiotrix.com', 'Mohammed', '$2a$10$hx.CBGH8e8HU3rtGWQZRQOLqQjtfv/vpoNbqDKVXm4tdYyNdd5mQu'),
+('ravi@aiotrix.com', 'Ravi', '$2a$10$hx.CBGH8e8HU3rtGWQZRQOLqQjtfv/vpoNbqDKVXm4tdYyNdd5mQu'),
+('priya@aiotrix.com', 'Priya', '$2a$10$hx.CBGH8e8HU3rtGWQZRQOLqQjtfv/vpoNbqDKVXm4tdYyNdd5mQu'),
+('arjun@aiotrix.com', 'Arjun', '$2a$10$hx.CBGH8e8HU3rtGWQZRQOLqQjtfv/vpoNbqDKVXm4tdYyNdd5mQu');
 
 INSERT INTO user_profiles (user_id, bio) VALUES
 (1, 'Backend learner'),
