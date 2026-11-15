@@ -1,6 +1,6 @@
 # Mini Jira API
 
-A backend-only task tracker, built to learn Go and PostgreSQL with a focus on relational data modeling. There is no frontend: the API is explored through Swagger UI or Postman.
+A backend-only task tracker, built to learn Go and PostgreSQL with a focus on relational data modeling. The API can be explored through Swagger UI or Postman, or through the React frontend in `frontend/`.
 
 ## Tech stack
 
@@ -60,6 +60,40 @@ go run ./cmd/api
 
 - Health check: http://localhost:8080/health
 - API docs: http://localhost:8080/docs
+
+## Frontend
+
+A React + TypeScript web app lives in `frontend/` (Vite, Tailwind CSS, React Router, TanStack Query). It has a kanban board with drag and drop, a sortable list, task details with subtasks, labels, comments and an activity timeline, member management and project reports.
+
+### Run it
+
+Requires Node.js 20 or newer.
+
+1. Start the backend (Postgres must be running, see above):
+
+   ```bash
+   go run ./cmd/api
+   ```
+
+2. In a second terminal, start the frontend:
+
+   ```bash
+   cd frontend && npm install && npm run dev
+   ```
+
+3. Open the URL Vite prints (usually http://localhost:5173).
+
+Log in with a seeded account such as `mohammed@aiotrix.com`, `ravi@aiotrix.com` or `priya@aiotrix.com` (password `password123`).
+
+### How it talks to the API
+
+The backend sends no CORS headers, so the browser only talks to the Vite dev server. Vite proxies every `/api/*` request to `http://localhost:8080/*` with the `/api` prefix removed (see `frontend/vite.config.ts`).
+
+The JWT is kept in `localStorage`. All token reads and writes are in `frontend/src/lib/auth.ts`, so moving to httpOnly cookies later only touches that file. Any 401 response clears the token and sends you back to the login page.
+
+Because there is no "list my organizations" endpoint yet, the home page opens an organization by ID and remembers every organization you open or create in `localStorage`, so they show up in the sidebar.
+
+`npm run build` type-checks the code and writes a production build to `frontend/dist/`.
 
 ## Data model
 
